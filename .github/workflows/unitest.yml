@@ -10,7 +10,7 @@ on:
       - main
 
 jobs:
-  build:
+  build:                                              ## this "build" is job name
     runs-on: ubuntu-latest   ## Container for deployment
     environment:
       name: Development
