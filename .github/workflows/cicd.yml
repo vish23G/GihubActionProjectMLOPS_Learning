@@ -48,7 +48,7 @@ jobs:
     env:
       # These secrets must be configured in your GitHub repository settings
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      IMAGE_NAME: flask-app # Change this to your desired image name
+      IMAGE_NAME: flask-new-mlop-app # Change this to your desired image name
 
     steps:
       - name: Checkout repository
