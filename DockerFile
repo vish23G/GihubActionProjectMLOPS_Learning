@@ -1,1 +1,25 @@
+# Use a slim, stable version of Python as the base image
+FROM python:3.10-slim
 
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the requirements file into the container
+#COPY requirements.txt .
+
+# Install the Python dependencies (Flask)
+# --no-cache-dir reduces the size of the final image
+#RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code into the container
+COPY . /app
+
+RUN pip install flask
+
+# Define the port the container will listen on (required by the prompt)
+# Note: This EXPOSE instruction is documentation; the -p flag on 'docker run' handles mapping.
+EXPOSE 5000
+
+# Specify the command to run the application when the container starts
+# The app.py script handles starting the Flask server on 0.0.0.0:5000
+CMD ["python", "flask_app.py"]
