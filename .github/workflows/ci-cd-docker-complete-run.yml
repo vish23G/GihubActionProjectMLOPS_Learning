@@ -1,84 +1,60 @@
-# This comprehensive workflow performs Continuous Integration (CI) and Continuous Deployment (CD).
-# 1. Runs unit tests with pytest.
-# 2. If tests pass, it builds the Docker image.
-# 3. Pushes the validated image to Docker Hub.
-# 4. **NEW: Pulls the image, runs a container, and performs an integration test.**
-
+---
 name: Flask CI/CD with Docker Hub Complete
-
 on:
   push:
-    branches: [ "main" ]
-  # Allows manual runs from the Actions tab
-  workflow_dispatch:
-
+    branches:
+      - main
+  workflow_dispatch: null
 jobs:
-  # ----------------------------------------------------------------------
-  # JOB 1: Test - Runs unit tests to validate application code integrity
-  # ----------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
+          python-version: "3.10"
       - name: Install dependencies (Flask and pytest)
-        run: |
+        run: >
           python -m pip install --upgrade pip
+
           # Note: requirements.txt must include 'Flask' and 'pytest'
+
           # Ensure any integration test dependencies (e.g., requests) are also included
+
           pip install -r requirements.txt
-          
       - name: Run Pytest Unit Tests
-        # The exit code from 'pytest' determines job success/failure.
         run: pytest
 
 ---
-
-  # ----------------------------------------------------------------------
-  # JOB 2: Build and Push - Runs only if tests pass
-  # ----------------------------------------------------------------------
+jobs:
   build-and-push:
-    # CRITICAL: This ensures deployment only happens after successful tests.
-    needs: test 
+    needs: test
     runs-on: ubuntu-latest
-    
-    # Environment variables for Docker Hub credentials and image naming
     env:
-      # These secrets must be configured in your GitHub repository settings
       DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-      IMAGE_NAME: flask-new-mlop-app # Change this to your desired image name
-
+      IMAGE_NAME: flask-new-mlop-app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      # Step 1: Log in to Docker Hub (docker.io) using secrets
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           registry: docker.io
-
-      # Step 2: Define tags (latest and short SHA)
       - name: Set up Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Final image path format: DOCKER_HUB_USERNAME/IMAGE_NAME
           images: ${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}
-          tags: |
+          tags: >
             type=sha,format=short,prefix=
-            # Tag with 'latest' only for pushes to the main branch
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
 
-      # Step 3: Build and push the image to Docker Hub
+            # Tag with 'latest' only for pushes to the main branch
+
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -86,76 +62,56 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Assumes your Dockerfile is in the repository root
           file: ./DockerFile
-
-      # Step 4: Output the full image tag for the next job (deploy-test)
       - name: Set output image tag
         id: image_tag_output
-        run: echo "IMAGE_TAG=${IMAGE_NAME}:${{ steps.meta.outputs.version }}" >> $GITHUB_OUTPUT
+        run: echo "IMAGE_TAG=${IMAGE_NAME}:${{ steps.meta.outputs.version }}" >>
+          $GITHUB_OUTPUT
 
 ---
-  
-  # ----------------------------------------------------------------------
-  # JOB 3: Deploy Test - Pulls the new image, runs a container, and tests it
-  # ----------------------------------------------------------------------
-  deploy-test:
-    # CRITICAL: This ensures the integration test only runs after the image is pushed.
-    needs: build-and-push 
-    runs-on: ubuntu-latest
-    
-    # Environment variables for image naming
-    env:
-      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-      IMAGE_NAME: ${{ needs.build-and-push.outputs.IMAGE_TAG }} # Gets the full tag from the previous job
+deploy-test:
+  needs: build-and-push
+  runs-on: ubuntu-latest
+  env:
+    DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+    IMAGE_NAME: ${{ needs.build-and-push.outputs.IMAGE_TAG }}
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Run Docker Container
+      run: |+
+        # Full image path: DOCKER_HUB_USERNAME/IMAGE_NAME:tag
+        FULL_IMAGE_NAME="${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}"
+        echo "Running container from image: $FULL_IMAGE_NAME"
+        docker run -d \
+          --name flask-app-test \
+          -p 8080:5000 \
+          $FULL_IMAGE_NAME
+          
+    - name: Wait for application to be ready
+      uses: jakejarvis/wait-action@master
+      with:
+        time: 15s
+    - name: Test Running Application Response
+      run: >
+        # Install 'curl' if not available (it usually is on ubuntu-latest)
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+        sudo apt-get update && sudo apt-get install -y curl
 
-      # Step 1: Run the Docker container
-      # We use 'docker run -d' to start the container in the background.
-      # We map port 8080 (host) to port 5000 (container - assuming Flask runs on 5000).
-      - name: Run Docker Container
-        run: |
-          # Full image path: DOCKER_HUB_USERNAME/IMAGE_NAME:tag
-          FULL_IMAGE_NAME="${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}"
-          echo "Running container from image: $FULL_IMAGE_NAME"
-          docker run -d \
-            --name flask-app-test \
-            -p 8080:5000 \
-            $FULL_IMAGE_NAME
-            
-      # Step 2: Wait for the application to start up
-      - name: Wait for application to be ready
-        # This is a critical step, as the app needs time to initialize inside the container
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '15s' # Wait for 15 seconds
 
-      # Step 3: Test the running application (Integration/E2E Test)
-      # This step confirms the container is running and the application is responding.
-      - name: Test Running Application Response
-        run: |
-          # Install 'curl' if not available (it usually is on ubuntu-latest)
-          sudo apt-get update && sudo apt-get install -y curl
-          
-          # Use curl to check the container's health/response on the mapped port
-          # The exit code (0 for success, >0 for failure) determines job success/failure.
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
-          
-          echo "Received HTTP Status Code: $STATUS_CODE"
-          
-          if [ "$STATUS_CODE" -ne 200 ]; then
-            echo "Integration test failed! Application did not return a 200 OK status."
-            exit 1
-          else
-            echo "Integration test passed! Application returned a 200 OK status."
-          fi
-          
-      # Step 4: Cleanup (Optional but Recommended)
- #     - name: Stop and Remove Container
- #       if: always() # Ensure cleanup runs even if previous steps fail
- #       run: |
- #         docker stop flask-app-test
- #         docker rm flask-app-test
+        # Use curl to check the container's health/response on the mapped port
+
+        # The exit code (0 for success, >0 for failure) determines job success/failure.
+
+        STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
+
+
+        echo "Received HTTP Status Code: $STATUS_CODE"
+
+
+        if [ "$STATUS_CODE" -ne 200 ]; then
+          echo "Integration test failed! Application did not return a 200 OK status."
+          exit 1
+        else
+          echo "Integration test passed! Application returned a 200 OK status."
+        fi
