@@ -113,9 +113,9 @@ jobs:
             -p 8080:5000 \
             "$FULL_IMAGE_NAME"
           
-      - name: Wait for application to be ready
-        uses: vish23G//my-wait-action@v1
-        with:
-          time: 30s
+      - name: Wait for application to be ready (Using 'sleep' instead of external Action)
+        # Replacing external 'jakejarvis/wait-action' with built-in 'sleep' command 
+        # to remove dependency on other GitHub accounts/repositories, as requested.
+        run: sleep 30s
 
      
