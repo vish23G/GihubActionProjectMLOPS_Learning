@@ -114,7 +114,7 @@ jobs:
             "$FULL_IMAGE_NAME"
           
       - name: Wait for application to be ready
-        uses: vish23G/wait-action@master
+        uses: vish23G//my-wait-action@v1
         with:
           time: 30s
 
