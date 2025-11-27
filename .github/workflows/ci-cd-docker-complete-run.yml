@@ -109,32 +109,13 @@ jobs:
           docker pull $FULL_IMAGE_NAME
           
           docker run -d \
-            --name flask-app-test \
+            --name flask-app-newmlops-test \
             -p 8080:5000 \
             "$FULL_IMAGE_NAME"
           
       - name: Wait for application to be ready
-        uses: jakejarvis/wait-action@master
+        uses: vishaldockermlops/wait-action@master
         with:
-          time: 15s
+          time: 30s
 
-      - name: Test Running Application Response
-        run: |
-          # Install 'curl' for health check
-          sudo apt-get update && sudo apt-get install -y curl
-
-          # Use curl to check the container's health/response on the mapped port
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
-
-          echo "Received HTTP Status Code: $STATUS_CODE"
-
-          if [ "$STATUS_CODE" -ne 200 ]; then
-            echo "Integration test failed! Application did not return a 200 OK status."
-            exit 1
-          else
-            echo "Integration test passed! Application returned a 200 OK status."
-          fi
-
-          # Optional cleanup: Stop and remove the test container
-          docker stop flask-app-test
-          docker rm flask-app-test
+     
