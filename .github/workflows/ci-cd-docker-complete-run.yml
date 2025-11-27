@@ -4,7 +4,7 @@
 # 3. Pushes the validated image to Docker Hub.
 # 4. **NEW: Pulls the image, runs a container, and performs an integration test.**
 
-name: Flask CI/CD with Docker Hub
+name: Flask CI/CD with Docker Hub Complete
 
 on:
   push:
